@@ -1,0 +1,71 @@
+{
+  "name": "@askrjs/otel",
+  "version": "0.0.1",
+  "description": "Redaction-safe OpenTelemetry instrumentation for the Askr platform.",
+  "keywords": [
+    "askr",
+    "observability",
+    "opentelemetry",
+    "telemetry",
+    "tracing"
+  ],
+  "homepage": "https://github.com/askrjs/askr-otel#readme",
+  "bugs": {
+    "url": "https://github.com/askrjs/askr-otel/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/askrjs/askr-otel.git"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "fmt": "vp fmt .",
+    "lint": "vp lint src tests vite.config.ts && npm run typecheck",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "test": "vp test run",
+    "test:publint": "publint",
+    "check": "npm run lint && npm test && npm run build && npm run test:publint",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@types/node": "^26.1.1",
+    "publint": "^0.3.21",
+    "typescript": "^6.0.3",
+    "vite-plus": "^0.2.4",
+    "vitest": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "npm@12.0.1"
+}
