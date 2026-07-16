@@ -213,6 +213,23 @@ describe('createTelemetry', () => {
     expect(telemetry.ssrRender({ status: 200 }, () => 'html')).toBe('html');
   });
 
+  it('should isolate logger failures and still end each span exactly once', async () => {
+    captured.length = 0;
+    const telemetry = createTelemetry({
+      logger: () => {
+        throw new Error('observer failed');
+      },
+    });
+
+    expect(telemetry.apiOperation({}, () => 'ok')).toBe('ok');
+    const failure = new Error('application failed');
+    await expect(telemetry.loader({}, async () => {
+      throw failure;
+    })).rejects.toBe(failure);
+    expect(captured).toHaveLength(2);
+    expect(captured.every((entry) => entry.ended === 1)).toBe(true);
+  });
+
   it('should derive HTTP status from response-like results without logging response data', async () => {
     captured.length = 0;
     const logs: Array<{

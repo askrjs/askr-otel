@@ -152,13 +152,39 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   );
   const logger = options.logger ?? (() => undefined);
   const now = options.now ?? (() => performance.now());
+  const emit = (
+    level: TelemetryLevel,
+    event: TelemetryOperation,
+    fields: Readonly<TelemetryFields>,
+  ): void => {
+    try {
+      logger(level, event, fields);
+    } catch {
+      // Application observers are isolated from instrumented work.
+    }
+  };
+  const clock = (): number => {
+    try {
+      const value = now();
+      return Number.isFinite(value) ? value : 0;
+    } catch {
+      return 0;
+    }
+  };
+  const observe = (work: () => void): void => {
+    try {
+      work();
+    } catch {
+      // OpenTelemetry observers must not alter application behavior.
+    }
+  };
 
   const log = (
     level: TelemetryLevel,
     event: TelemetryOperation,
     fields: TelemetryFields = {},
   ): void => {
-    logger(level, event, Object.freeze(sanitizeFields(fields)));
+    emit(level, event, Object.freeze(sanitizeFields(fields)));
   };
 
   const span = <T>(
@@ -171,36 +197,44 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
       operation,
       { kind: SpanKind.INTERNAL, attributes: spanAttributes(fields) },
       (activeSpan: Span) => {
-        const started = now();
+        const started = clock();
+        let finished = false;
         const finish = (result?: unknown, error?: unknown): void => {
-          const durationMs = Math.max(0, now() - started);
+          if (finished) return;
+          finished = true;
+          const durationMs = Math.max(0, clock() - started);
           const status = responseStatus(result) ?? fields.status;
           const failed = error !== undefined || (status !== undefined && status >= 500);
-          activeSpan.setAttribute('askr.durationMs', durationMs);
+          observe(() => activeSpan.setAttribute('askr.durationMs', durationMs));
 
           if (status !== undefined) {
-            activeSpan.setAttribute('askr.status', status);
+            observe(() => activeSpan.setAttribute('askr.status', status));
           }
 
           if (failed) {
-            activeSpan.setStatus({ code: SpanStatusCode.ERROR });
+            observe(() => activeSpan.setStatus({ code: SpanStatusCode.ERROR }));
             if (error instanceof Error) {
-              activeSpan.recordException(error);
+              observe(() => activeSpan.recordException(error));
             }
           } else {
-            activeSpan.setStatus({ code: SpanStatusCode.OK });
+            observe(() => activeSpan.setStatus({ code: SpanStatusCode.OK }));
           }
 
-          const spanContext = activeSpan.spanContext();
-          log(failed ? 'error' : 'info', operation, {
-            ...fields,
-            status,
-            traceId: trace.isSpanContextValid(spanContext)
-              ? spanContext.traceId
-              : fields.traceId,
-            durationMs,
-          });
-          activeSpan.end();
+          try {
+            let observedTraceId = fields.traceId;
+            observe(() => {
+              const spanContext = activeSpan.spanContext();
+              if (trace.isSpanContextValid(spanContext)) observedTraceId = spanContext.traceId;
+            });
+            log(failed ? 'error' : 'info', operation, {
+              ...fields,
+              status,
+              traceId: observedTraceId,
+              durationMs,
+            });
+          } finally {
+            observe(() => activeSpan.end());
+          }
         };
 
         try {

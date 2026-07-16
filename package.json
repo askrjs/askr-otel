@@ -17,6 +17,10 @@
     "type": "git",
     "url": "git+https://github.com/askrjs/askr-otel.git"
   },
+  "author": {
+    "name": "askrjs",
+    "url": "https://github.com/askrjs"
+  },
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -45,8 +49,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "test": "vp test run",
     "test:publint": "publint",
-    "check": "npm run lint && npm test && npm run build && npm run test:publint",
-    "prepack": "npm run build"
+    "pack:check": "npm pack --ignore-scripts --dry-run --json",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run test:publint && npm run pack:check",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0"
