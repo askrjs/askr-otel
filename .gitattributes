@@ -1,0 +1,16 @@
+# Normalize text files and enforce LF across every CI host.
+* text=auto eol=lf
+
+# Windows-native scripts retain their conventional line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets must not be normalized.
+*.gif binary
+*.ico binary
+*.jpeg binary
+*.jpg binary
+*.png binary
+*.woff binary
+*.woff2 binary
