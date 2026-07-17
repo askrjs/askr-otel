@@ -15,9 +15,9 @@ import {
   type TimeInput,
   type Tracer,
   type TracerProvider,
-} from '@opentelemetry/api';
-import { beforeAll, describe, expect, it } from 'vitest';
-import { createTelemetry, type TelemetryFields } from '../src/index';
+} from "@opentelemetry/api";
+import { beforeAll, describe, expect, it } from "vitest";
+import { createTelemetry, type TelemetryFields } from "../src/index";
 
 type CapturedSpan = {
   name: string;
@@ -33,9 +33,9 @@ const captured: CapturedSpan[] = [];
 let nextSpan = 1;
 
 function validSpanContext(): SpanContext {
-  const suffix = String(nextSpan++).padStart(16, '0');
+  const suffix = String(nextSpan++).padStart(16, "0");
   return {
-    traceId: '10000000000000000000000000000001',
+    traceId: "10000000000000000000000000000001",
     spanId: suffix,
     traceFlags: 1,
   };
@@ -101,15 +101,13 @@ function createTracer(): Tracer {
       contextOrWork?: Context | ((span: Span) => T),
       possibleWork?: (span: Span) => T,
     ): T {
-      const options = typeof optionsOrWork === 'function' ? {} : optionsOrWork;
+      const options = typeof optionsOrWork === "function" ? {} : optionsOrWork;
       const parent =
-        contextOrWork && typeof contextOrWork !== 'function'
-          ? contextOrWork
-          : context.active();
+        contextOrWork && typeof contextOrWork !== "function" ? contextOrWork : context.active();
       const work =
-        typeof optionsOrWork === 'function'
+        typeof optionsOrWork === "function"
           ? optionsOrWork
-          : typeof contextOrWork === 'function'
+          : typeof contextOrWork === "function"
             ? contextOrWork
             : possibleWork!;
       const span = startSpan(name, options, parent);
@@ -150,18 +148,18 @@ beforeAll(() => {
   const tracer = createTracer();
   trace.setGlobalTracerProvider({ getTracer: () => tracer } as TracerProvider);
   propagation.setGlobalPropagator({
-    fields: () => ['x-trace-id'],
+    fields: () => ["x-trace-id"],
     inject(value, carrier, setter) {
       const spanContext = trace.getSpanContext(value);
-      if (spanContext) setter.set(carrier, 'x-trace-id', spanContext.traceId);
+      if (spanContext) setter.set(carrier, "x-trace-id", spanContext.traceId);
     },
     extract(value, carrier, getter) {
-      const traceId = getter.get(carrier, 'x-trace-id');
+      const traceId = getter.get(carrier, "x-trace-id");
       const normalized = Array.isArray(traceId) ? traceId[0] : traceId;
       if (!normalized) return value;
       return trace.setSpanContext(value, {
         traceId: normalized,
-        spanId: '2000000000000001',
+        spanId: "2000000000000001",
         traceFlags: 1,
         isRemote: true,
       });
@@ -169,8 +167,8 @@ beforeAll(() => {
   });
 });
 
-describe('createTelemetry', () => {
-  it('should preserve nested span identity and record status and duration', async () => {
+describe("createTelemetry", () => {
+  it("should preserve nested span identity and record status and duration", async () => {
     captured.length = 0;
     let time = 10;
     const logs: Array<{ event: string; fields: Readonly<TelemetryFields> }> = [];
@@ -179,26 +177,26 @@ describe('createTelemetry', () => {
       logger: (_level, event, fields) => logs.push({ event, fields }),
     });
 
-    const result = await telemetry.request({ requestId: 'req-1', route: '/items/:id' }, () =>
-      telemetry.loader({ route: '/items/:id' }, async () => 'loaded'),
+    const result = await telemetry.request({ requestId: "req-1", route: "/items/:id" }, () =>
+      telemetry.loader({ route: "/items/:id" }, async () => "loaded"),
     );
 
-    expect(result).toBe('loaded');
-    expect(captured.map((entry) => entry.name)).toEqual(['askr.request', 'askr.loader']);
+    expect(result).toBe("loaded");
+    expect(captured.map((entry) => entry.name)).toEqual(["askr.request", "askr.loader"]);
     expect(captured[1].parentSpanId).toBe(captured[0].context.spanId);
     expect(captured.every((entry) => entry.status?.code === SpanStatusCode.OK)).toBe(true);
     expect(captured.every((entry) => entry.ended === 1)).toBe(true);
     expect(logs.every((entry) => entry.fields.traceId === captured[0].context.traceId)).toBe(true);
-    expect(logs.every((entry) => typeof entry.fields.durationMs === 'number')).toBe(true);
+    expect(logs.every((entry) => typeof entry.fields.durationMs === "number")).toBe(true);
   });
 
-  it('should record rejected operations without changing their rejection', async () => {
+  it("should record rejected operations without changing their rejection", async () => {
     captured.length = 0;
     const telemetry = createTelemetry();
-    const failure = new Error('loader failed');
+    const failure = new Error("loader failed");
 
     await expect(
-      telemetry.loader({ route: '/failure' }, async () => {
+      telemetry.loader({ route: "/failure" }, async () => {
         throw failure;
       }),
     ).rejects.toBe(failure);
@@ -208,29 +206,31 @@ describe('createTelemetry', () => {
     expect(captured[0].ended).toBe(1);
   });
 
-  it('should preserve synchronous operations as synchronous values', () => {
+  it("should preserve synchronous operations as synchronous values", () => {
     const telemetry = createTelemetry();
-    expect(telemetry.ssrRender({ status: 200 }, () => 'html')).toBe('html');
+    expect(telemetry.ssrRender({ status: 200 }, () => "html")).toBe("html");
   });
 
-  it('should isolate logger failures and still end each span exactly once', async () => {
+  it("should isolate logger failures and still end each span exactly once", async () => {
     captured.length = 0;
     const telemetry = createTelemetry({
       logger: () => {
-        throw new Error('observer failed');
+        throw new Error("observer failed");
       },
     });
 
-    expect(telemetry.apiOperation({}, () => 'ok')).toBe('ok');
-    const failure = new Error('application failed');
-    await expect(telemetry.loader({}, async () => {
-      throw failure;
-    })).rejects.toBe(failure);
+    expect(telemetry.apiOperation({}, () => "ok")).toBe("ok");
+    const failure = new Error("application failed");
+    await expect(
+      telemetry.loader({}, async () => {
+        throw failure;
+      }),
+    ).rejects.toBe(failure);
     expect(captured).toHaveLength(2);
     expect(captured.every((entry) => entry.ended === 1)).toBe(true);
   });
 
-  it('should derive HTTP status from response-like results without logging response data', async () => {
+  it("should derive HTTP status from response-like results without logging response data", async () => {
     captured.length = 0;
     const logs: Array<{
       level: string;
@@ -240,36 +240,36 @@ describe('createTelemetry', () => {
       logger: (level, _event, fields) => logs.push({ level, fields }),
     });
 
-    const unavailable = await telemetry.request({ requestId: 'req-503' }, async () => ({
+    const unavailable = await telemetry.request({ requestId: "req-503" }, async () => ({
       status: 503,
-      body: 'sensitive',
+      body: "sensitive",
     }));
-    const notFound = telemetry.apiOperation({ operation: 'inventory.read' }, () => ({
+    const notFound = telemetry.apiOperation({ operation: "inventory.read" }, () => ({
       status: 404,
-      body: 'not logged',
+      body: "not logged",
     }));
 
     expect(unavailable.status).toBe(503);
     expect(notFound.status).toBe(404);
-    expect(captured[0].attributes['askr.status']).toBe(503);
+    expect(captured[0].attributes["askr.status"]).toBe(503);
     expect(captured[0].status?.code).toBe(SpanStatusCode.ERROR);
-    expect(captured[1].attributes['askr.status']).toBe(404);
+    expect(captured[1].attributes["askr.status"]).toBe(404);
     expect(captured[1].status?.code).toBe(SpanStatusCode.OK);
     expect(logs).toEqual([
       {
-        level: 'error',
-        fields: expect.objectContaining({ requestId: 'req-503', status: 503 }),
+        level: "error",
+        fields: expect.objectContaining({ requestId: "req-503", status: 503 }),
       },
       {
-        level: 'info',
-        fields: expect.objectContaining({ operation: 'inventory.read', status: 404 }),
+        level: "info",
+        fields: expect.objectContaining({ operation: "inventory.read", status: 404 }),
       },
     ]);
-    expect(JSON.stringify(logs)).not.toContain('sensitive');
-    expect(JSON.stringify(logs)).not.toContain('not logged');
+    expect(JSON.stringify(logs)).not.toContain("sensitive");
+    expect(JSON.stringify(logs)).not.toContain("not logged");
   });
 
-  it('should allowlist structured fields and drop sensitive request data', () => {
+  it("should allowlist structured fields and drop sensitive request data", () => {
     let written: Readonly<TelemetryFields> | undefined;
     const telemetry = createTelemetry({
       logger: (_level, _event, fields) => {
@@ -277,21 +277,21 @@ describe('createTelemetry', () => {
       },
     });
 
-    telemetry.log('info', 'askr.action', {
-      requestId: 'req-2',
-      action: 'save-profile',
-      body: { email: 'person@example.com' },
-      cookie: 'session=secret',
-      authorization: 'Bearer secret',
-      token: 'secret',
+    telemetry.log("info", "askr.action", {
+      requestId: "req-2",
+      action: "save-profile",
+      body: { email: "person@example.com" },
+      cookie: "session=secret",
+      authorization: "Bearer secret",
+      token: "secret",
     } as TelemetryFields);
 
-    expect(written).toEqual({ requestId: 'req-2', action: 'save-profile' });
-    expect(JSON.stringify(written)).not.toContain('secret');
+    expect(written).toEqual({ requestId: "req-2", action: "save-profile" });
+    expect(JSON.stringify(written)).not.toContain("secret");
     expect(Object.isFrozen(written)).toBe(true);
   });
 
-  it('should inject and extract trace identity through caller-owned carriers', () => {
+  it("should inject and extract trace identity through caller-owned carriers", () => {
     const telemetry = createTelemetry();
     const getter = {
       keys: (carrier: Record<string, string>) => Object.keys(carrier),
@@ -303,17 +303,17 @@ describe('createTelemetry', () => {
       },
     };
     const incoming = telemetry.extract(
-      { 'x-trace-id': '30000000000000000000000000000003' },
+      { "x-trace-id": "30000000000000000000000000000003" },
       getter,
     );
     const carrier: Record<string, string> = {};
 
     telemetry.withContext(incoming, () => {
-      expect(telemetry.traceId()).toBe('30000000000000000000000000000003');
+      expect(telemetry.traceId()).toBe("30000000000000000000000000000003");
       telemetry.inject(carrier, setter);
     });
 
-    expect(carrier).toEqual({ 'x-trace-id': '30000000000000000000000000000003' });
+    expect(carrier).toEqual({ "x-trace-id": "30000000000000000000000000000003" });
     expect(trace.getSpanContext(ROOT_CONTEXT)).toBeUndefined();
   });
 });

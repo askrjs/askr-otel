@@ -5,7 +5,7 @@ directly to the optional `@opentelemetry/api` peer and never bundles an SDK,
 processor, exporter, vendor backend, or transport.
 
 ```ts
-import { createTelemetry } from '@askrjs/otel';
+import { createTelemetry } from "@askrjs/otel";
 
 const telemetry = createTelemetry({
   logger(level, event, fields) {
@@ -13,9 +13,8 @@ const telemetry = createTelemetry({
   },
 });
 
-const response = await telemetry.request(
-  { requestId, route: '/projects/:projectId' },
-  () => telemetry.loader({ route: '/projects/:projectId' }, loadProject),
+const response = await telemetry.request({ requestId, route: "/projects/:projectId" }, () =>
+  telemetry.loader({ route: "/projects/:projectId" }, loadProject),
 );
 ```
 

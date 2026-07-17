@@ -9,18 +9,18 @@ import {
   type TextMapGetter,
   type TextMapSetter,
   type Tracer,
-} from '@opentelemetry/api';
+} from "@opentelemetry/api";
 
-export type TelemetryLevel = 'debug' | 'info' | 'warn' | 'error';
+export type TelemetryLevel = "debug" | "info" | "warn" | "error";
 export type TelemetryOperation =
-  | 'askr.request'
-  | 'askr.route.match'
-  | 'askr.loader'
-  | 'askr.action'
-  | 'askr.api.operation'
-  | 'askr.query.prefetch'
-  | 'askr.ssr.render'
-  | 'askr.vite.document';
+  | "askr.request"
+  | "askr.route.match"
+  | "askr.loader"
+  | "askr.action"
+  | "askr.api.operation"
+  | "askr.query.prefetch"
+  | "askr.ssr.render"
+  | "askr.vite.document";
 
 export interface TelemetryFields {
   requestId?: string;
@@ -39,11 +39,7 @@ export type TelemetryLogger = (
 ) => void;
 
 export interface Telemetry {
-  span<T>(
-    operation: TelemetryOperation,
-    fields: TelemetryFields,
-    work: () => T,
-  ): T;
+  span<T>(operation: TelemetryOperation, fields: TelemetryFields, work: () => T): T;
   request<T>(fields: TelemetryFields, work: () => T): T;
   routeMatch<T>(fields: TelemetryFields, work: () => T): T;
   loader<T>(fields: TelemetryFields, work: () => T): T;
@@ -52,11 +48,7 @@ export interface Telemetry {
   queryPrefetch<T>(fields: TelemetryFields, work: () => T): T;
   ssrRender<T>(fields: TelemetryFields, work: () => T): T;
   viteDocument<T>(fields: TelemetryFields, work: () => T): T;
-  log(
-    level: TelemetryLevel,
-    event: TelemetryOperation,
-    fields?: TelemetryFields,
-  ): void;
+  log(level: TelemetryLevel, event: TelemetryOperation, fields?: TelemetryFields): void;
   extract<Carrier>(carrier: Carrier, getter: TextMapGetter<Carrier>): Context;
   inject<Carrier>(carrier: Carrier, setter: TextMapSetter<Carrier>, value?: Context): Carrier;
   withContext<T>(value: Context, work: () => T): T;
@@ -71,13 +63,13 @@ export interface TelemetryOptions {
 }
 
 const FIELD_NAMES = [
-  'requestId',
-  'traceId',
-  'route',
-  'action',
-  'operation',
-  'status',
-  'durationMs',
+  "requestId",
+  "traceId",
+  "route",
+  "action",
+  "operation",
+  "status",
+  "durationMs",
 ] as const;
 
 function sanitizeFields(fields: TelemetryFields): TelemetryFields {
@@ -86,7 +78,7 @@ function sanitizeFields(fields: TelemetryFields): TelemetryFields {
 
   for (const key of FIELD_NAMES) {
     const value = source[key];
-    if (typeof value === 'string' || typeof value === 'number') {
+    if (typeof value === "string" || typeof value === "number") {
       (safe as Record<string, unknown>)[key] = value;
     }
   }
@@ -106,26 +98,20 @@ function spanAttributes(fields: TelemetryFields): Record<string, string | number
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return (
-    (typeof value === 'object' || typeof value === 'function') &&
+    (typeof value === "object" || typeof value === "function") &&
     value !== null &&
-    typeof (value as { then?: unknown }).then === 'function'
+    typeof (value as { then?: unknown }).then === "function"
   );
 }
 
 function responseStatus(value: unknown): number | undefined {
-  if (
-    (typeof value !== 'object' && typeof value !== 'function') ||
-    value === null
-  ) {
+  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
     return undefined;
   }
 
   try {
     const status = (value as { status?: unknown }).status;
-    return typeof status === 'number' &&
-      Number.isInteger(status) &&
-      status >= 100 &&
-      status <= 599
+    return typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
       ? status
       : undefined;
   } catch {
@@ -147,7 +133,7 @@ function activeTraceId(): string | undefined {
  */
 export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const tracer: Tracer = trace.getTracer(
-    options.tracerName ?? '@askrjs/otel',
+    options.tracerName ?? "@askrjs/otel",
     options.tracerVersion,
   );
   const logger = options.logger ?? (() => undefined);
@@ -205,10 +191,10 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
           const durationMs = Math.max(0, clock() - started);
           const status = responseStatus(result) ?? fields.status;
           const failed = error !== undefined || (status !== undefined && status >= 500);
-          observe(() => activeSpan.setAttribute('askr.durationMs', durationMs));
+          observe(() => activeSpan.setAttribute("askr.durationMs", durationMs));
 
           if (status !== undefined) {
-            observe(() => activeSpan.setAttribute('askr.status', status));
+            observe(() => activeSpan.setAttribute("askr.status", status));
           }
 
           if (failed) {
@@ -226,7 +212,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
               const spanContext = activeSpan.spanContext();
               if (trace.isSpanContextValid(spanContext)) observedTraceId = spanContext.traceId;
             });
-            log(failed ? 'error' : 'info', operation, {
+            log(failed ? "error" : "info", operation, {
               ...fields,
               status,
               traceId: observedTraceId,
@@ -269,14 +255,14 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
   return Object.freeze({
     span,
-    request: bind('askr.request'),
-    routeMatch: bind('askr.route.match'),
-    loader: bind('askr.loader'),
-    action: bind('askr.action'),
-    apiOperation: bind('askr.api.operation'),
-    queryPrefetch: bind('askr.query.prefetch'),
-    ssrRender: bind('askr.ssr.render'),
-    viteDocument: bind('askr.vite.document'),
+    request: bind("askr.request"),
+    routeMatch: bind("askr.route.match"),
+    loader: bind("askr.loader"),
+    action: bind("askr.action"),
+    apiOperation: bind("askr.api.operation"),
+    queryPrefetch: bind("askr.query.prefetch"),
+    ssrRender: bind("askr.ssr.render"),
+    viteDocument: bind("askr.vite.document"),
     log,
     extract: <Carrier>(carrier: Carrier, getter: TextMapGetter<Carrier>): Context =>
       propagation.extract(context.active(), carrier, getter),
