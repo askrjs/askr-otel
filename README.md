@@ -1,5 +1,8 @@
 # @askrjs/otel
 
+[![CI](https://github.com/askrjs/askr-otel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/askrjs/askr-otel/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/%40askrjs%2Fotel.svg)](https://www.npmjs.com/package/@askrjs/otel)
+
 OpenTelemetry instrumentation for Askr platform operations. The package talks
 directly to the optional `@opentelemetry/api` peer and never bundles an SDK,
 processor, exporter, vendor backend, or transport.
