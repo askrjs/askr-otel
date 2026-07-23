@@ -91,17 +91,22 @@ function sanitizeFields(
   for (const key of FIELD_NAMES) {
     const value = source[key];
     if (typeof value === "string" || typeof value === "number") {
-      const bounded =
-        typeof value === "string"
-          ? [...value]
-              .filter((character) => {
-                const code = character.charCodeAt(0);
-                return code > 31 && code !== 127;
-              })
-              .join("")
-              .slice(0, maxLength)
-          : value;
-      const sanitized = sanitizer ? sanitizer(key, bounded) : bounded;
+      let bounded: string | number = value;
+      if (typeof value === "string") {
+        let result = "";
+        for (const character of value) {
+          const code = character.codePointAt(0)!;
+          if (code > 31 && code !== 127) result += character;
+          if (result.length >= maxLength) break;
+        }
+        bounded = result.slice(0, maxLength);
+      }
+      let sanitized: string | number | undefined;
+      try {
+        sanitized = sanitizer ? sanitizer(key, bounded) : bounded;
+      } catch {
+        continue;
+      }
       if (typeof sanitized === "string" || typeof sanitized === "number")
         (safe as Record<string, unknown>)[key] =
           typeof sanitized === "string" ? sanitized.slice(0, maxLength) : sanitized;
