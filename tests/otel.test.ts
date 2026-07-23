@@ -190,7 +190,7 @@ describe("createTelemetry", () => {
     expect(logs.every((entry) => typeof entry.fields.durationMs === "number")).toBe(true);
   });
 
-  it("should record rejected operations without changing their rejection", async () => {
+  it("should not export raw rejected exceptions without an explicit sanitizer", async () => {
     captured.length = 0;
     const telemetry = createTelemetry();
     const failure = new Error("loader failed");
@@ -202,8 +202,28 @@ describe("createTelemetry", () => {
     ).rejects.toBe(failure);
 
     expect(captured[0].status?.code).toBe(SpanStatusCode.ERROR);
-    expect(captured[0].exceptions).toEqual([failure]);
+    expect(captured[0].exceptions).toEqual([]);
     expect(captured[0].ended).toBe(1);
+  });
+
+  it("should cap and redact fields and export only sanitized exceptions", async () => {
+    captured.length = 0;
+    const logs: TelemetryFields[] = [];
+    const telemetry = createTelemetry({
+      maxFieldLength: 8,
+      sanitizeField: (name, value) => (name === "requestId" ? undefined : value),
+      sanitizeException: () => ({ name: "Error", message: "operation failed" }),
+      logger: (_level, _event, fields) => logs.push(fields),
+    });
+    await expect(
+      telemetry.loader({ requestId: "secret", route: "/items/{id}\nprivate" }, async () => {
+        throw new Error("database password");
+      }),
+    ).rejects.toThrow("database password");
+    expect(captured[0].attributes["askr.requestId"]).toBeUndefined();
+    expect(captured[0].attributes["askr.route"]).toBe("/items/{");
+    expect(captured[0].exceptions).toEqual([{ name: "Error", message: "operation failed" }]);
+    expect(logs[0].requestId).toBeUndefined();
   });
 
   it("should preserve synchronous operations as synchronous values", () => {

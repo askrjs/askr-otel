@@ -5,6 +5,7 @@ import {
   SpanStatusCode,
   trace,
   type Context,
+  type Exception,
   type Span,
   type TextMapGetter,
   type TextMapSetter,
@@ -60,6 +61,13 @@ export interface TelemetryOptions {
   tracerVersion?: string;
   logger?: TelemetryLogger;
   now?: () => number;
+  maxFieldLength?: number;
+  sanitizeField?: (
+    name: keyof TelemetryFields,
+    value: string | number,
+  ) => string | number | undefined;
+  /** Exceptions are not exported unless this hook returns a sanitized value. */
+  sanitizeException?: (error: Error) => Exception | undefined;
 }
 
 const FIELD_NAMES = [
@@ -72,14 +80,36 @@ const FIELD_NAMES = [
   "durationMs",
 ] as const;
 
-function sanitizeFields(fields: TelemetryFields): TelemetryFields {
+function sanitizeFields(
+  fields: TelemetryFields,
+  maxLength = 256,
+  sanitizer?: TelemetryOptions["sanitizeField"],
+): TelemetryFields {
   const source = fields as Record<string, unknown>;
   const safe: TelemetryFields = {};
 
   for (const key of FIELD_NAMES) {
     const value = source[key];
     if (typeof value === "string" || typeof value === "number") {
-      (safe as Record<string, unknown>)[key] = value;
+      let bounded: string | number = value;
+      if (typeof value === "string") {
+        let result = "";
+        for (const character of value) {
+          const code = character.codePointAt(0)!;
+          if (code > 31 && code !== 127) result += character;
+          if (result.length >= maxLength) break;
+        }
+        bounded = result.slice(0, maxLength);
+      }
+      let sanitized: string | number | undefined;
+      try {
+        sanitized = sanitizer ? sanitizer(key, bounded) : bounded;
+      } catch {
+        continue;
+      }
+      if (typeof sanitized === "string" || typeof sanitized === "number")
+        (safe as Record<string, unknown>)[key] =
+          typeof sanitized === "string" ? sanitized.slice(0, maxLength) : sanitized;
     }
   }
 
@@ -132,6 +162,9 @@ function activeTraceId(): string | undefined {
  * provider. This package never installs an SDK, processor, backend, or exporter.
  */
 export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
+  const maxFieldLength = options.maxFieldLength ?? 256;
+  if (!Number.isInteger(maxFieldLength) || maxFieldLength <= 0)
+    throw new TypeError("Telemetry maxFieldLength must be a positive integer.");
   const tracer: Tracer = trace.getTracer(
     options.tracerName ?? "@askrjs/otel",
     options.tracerVersion,
@@ -170,7 +203,11 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     event: TelemetryOperation,
     fields: TelemetryFields = {},
   ): void => {
-    emit(level, event, Object.freeze(sanitizeFields(fields)));
+    emit(
+      level,
+      event,
+      Object.freeze(sanitizeFields(fields, maxFieldLength, options.sanitizeField)),
+    );
   };
 
   const span = <T>(
@@ -178,7 +215,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     inputFields: TelemetryFields,
     work: () => T,
   ): T => {
-    const fields = sanitizeFields(inputFields);
+    const fields = sanitizeFields(inputFields, maxFieldLength, options.sanitizeField);
     return tracer.startActiveSpan(
       operation,
       { kind: SpanKind.INTERNAL, attributes: spanAttributes(fields) },
@@ -199,8 +236,11 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
           if (failed) {
             observe(() => activeSpan.setStatus({ code: SpanStatusCode.ERROR }));
-            if (error instanceof Error) {
-              observe(() => activeSpan.recordException(error));
+            if (error instanceof Error && options.sanitizeException) {
+              observe(() => {
+                const sanitized = options.sanitizeException?.(error);
+                if (sanitized !== undefined) activeSpan.recordException(sanitized);
+              });
             }
           } else {
             observe(() => activeSpan.setStatus({ code: SpanStatusCode.OK }));
