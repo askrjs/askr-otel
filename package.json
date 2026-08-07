@@ -55,15 +55,15 @@
     "prepublishOnly": "npm run check"
   },
   "devDependencies": {
-    "@opentelemetry/api": "^1.9.0",
-    "@types/node": "^26.1.1",
-    "publint": "^0.3.21",
-    "typescript": "^6.0.3",
-    "vite-plus": "^0.2.4",
-    "vitest": "^4.0.0"
+    "@opentelemetry/api": "^1.9.1",
+    "@types/node": "^26.1.2",
+    "publint": "^0.3.23",
+    "typescript": "^7.0.2",
+    "vite-plus": "^0.2.8",
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "@opentelemetry/api": "^1.9.0"
+    "@opentelemetry/api": "^1.9.1"
   },
   "peerDependenciesMeta": {
     "@opentelemetry/api": {
