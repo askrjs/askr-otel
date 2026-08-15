@@ -12,7 +12,10 @@ import {
   type Tracer,
 } from "@opentelemetry/api";
 
+/** Severity of a telemetry log line, mirrored from common structured-logging conventions. */
 export type TelemetryLevel = "debug" | "info" | "warn" | "error";
+
+/** The set of Askr lifecycle stages that {@link Telemetry} can wrap with a span. */
 export type TelemetryOperation =
   | "askr.request"
   | "askr.route.match"
@@ -23,6 +26,10 @@ export type TelemetryOperation =
   | "askr.ssr.render"
   | "askr.vite.document";
 
+/**
+ * Structured fields attached to a span or log line. Only these known keys are
+ * ever sanitized and forwarded; unknown keys on a passed-in object are dropped.
+ */
 export interface TelemetryFields {
   requestId?: string;
   traceId?: string;
@@ -33,35 +40,63 @@ export interface TelemetryFields {
   durationMs?: number;
 }
 
+/** Callback invoked with each sanitized telemetry log line. */
 export type TelemetryLogger = (
   level: TelemetryLevel,
   event: TelemetryOperation,
   fields: Readonly<TelemetryFields>,
 ) => void;
 
+/**
+ * Function-first bridge to the application's installed OpenTelemetry provider.
+ * Every method wraps a unit of work in a span (or emits a log line) and never
+ * throws on account of tracing/logging failures — application behavior is
+ * always isolated from observability failures.
+ */
 export interface Telemetry {
+  /** Wraps `work` in a span for the given `operation`, recording `fields` as attributes. */
   span<T>(operation: TelemetryOperation, fields: TelemetryFields, work: () => T): T;
+  /** Convenience wrapper for {@link Telemetry.span} with operation `"askr.request"`. */
   request<T>(fields: TelemetryFields, work: () => T): T;
+  /** Convenience wrapper for {@link Telemetry.span} with operation `"askr.route.match"`. */
   routeMatch<T>(fields: TelemetryFields, work: () => T): T;
+  /** Convenience wrapper for {@link Telemetry.span} with operation `"askr.loader"`. */
   loader<T>(fields: TelemetryFields, work: () => T): T;
+  /** Convenience wrapper for {@link Telemetry.span} with operation `"askr.action"`. */
   action<T>(fields: TelemetryFields, work: () => T): T;
+  /** Convenience wrapper for {@link Telemetry.span} with operation `"askr.api.operation"`. */
   apiOperation<T>(fields: TelemetryFields, work: () => T): T;
+  /** Convenience wrapper for {@link Telemetry.span} with operation `"askr.query.prefetch"`. */
   queryPrefetch<T>(fields: TelemetryFields, work: () => T): T;
+  /** Convenience wrapper for {@link Telemetry.span} with operation `"askr.ssr.render"`. */
   ssrRender<T>(fields: TelemetryFields, work: () => T): T;
+  /** Convenience wrapper for {@link Telemetry.span} with operation `"askr.vite.document"`. */
   viteDocument<T>(fields: TelemetryFields, work: () => T): T;
+  /** Emits a single sanitized log line without opening a span. */
   log(level: TelemetryLevel, event: TelemetryOperation, fields?: TelemetryFields): void;
+  /** Extracts a trace {@link Context} from a carrier (e.g. incoming request headers) using `getter`. */
   extract<Carrier>(carrier: Carrier, getter: TextMapGetter<Carrier>): Context;
+  /** Injects the active (or given) {@link Context} into `carrier` using `setter`, returning the carrier. */
   inject<Carrier>(carrier: Carrier, setter: TextMapSetter<Carrier>, value?: Context): Carrier;
+  /** Runs `work` with `value` as the active OpenTelemetry context. */
   withContext<T>(value: Context, work: () => T): T;
+  /** Returns the trace ID of the currently active span, if any and if valid. */
   traceId(): string | undefined;
 }
 
+/** Configuration accepted by {@link createTelemetry}. */
 export interface TelemetryOptions {
+  /** Name passed to `trace.getTracer`. Defaults to `"@askrjs/otel"`. */
   tracerName?: string;
+  /** Version passed to `trace.getTracer`. */
   tracerVersion?: string;
+  /** Sink for sanitized log lines. Defaults to a no-op. */
   logger?: TelemetryLogger;
+  /** Clock used for span durations. Defaults to `performance.now`. */
   now?: () => number;
+  /** Maximum length, in characters, retained for any string field. Defaults to 256. */
   maxFieldLength?: number;
+  /** Per-field hook to redact or transform a field before it is logged or attached to a span; return `undefined` to drop it. */
   sanitizeField?: (
     name: keyof TelemetryFields,
     value: string | number,

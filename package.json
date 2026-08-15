@@ -1,6 +1,6 @@
 {
   "name": "@askrjs/otel",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Redaction-safe OpenTelemetry instrumentation for the Askr platform.",
   "keywords": [
     "askr",
