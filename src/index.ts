@@ -115,16 +115,27 @@ const FIELD_NAMES = [
   "durationMs",
 ] as const;
 
+function readProperty(source: unknown, key: PropertyKey): unknown {
+  if ((typeof source !== "object" && typeof source !== "function") || source === null) {
+    return undefined;
+  }
+
+  try {
+    return Reflect.get(source, key);
+  } catch {
+    return undefined;
+  }
+}
+
 function sanitizeFields(
   fields: TelemetryFields,
   maxLength = 256,
   sanitizer?: TelemetryOptions["sanitizeField"],
 ): TelemetryFields {
-  const source = fields as Record<string, unknown>;
   const safe: TelemetryFields = {};
 
   for (const key of FIELD_NAMES) {
-    const value = source[key];
+    const value = readProperty(fields, key);
     if (typeof value === "string" || typeof value === "number") {
       let bounded: string | number = value;
       if (typeof value === "string") {
@@ -162,11 +173,7 @@ function spanAttributes(fields: TelemetryFields): Record<string, string | number
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return (
-    (typeof value === "object" || typeof value === "function") &&
-    value !== null &&
-    typeof (value as { then?: unknown }).then === "function"
-  );
+  return typeof readProperty(value, "then") === "function";
 }
 
 function responseStatus(value: unknown): number | undefined {
@@ -174,14 +181,10 @@ function responseStatus(value: unknown): number | undefined {
     return undefined;
   }
 
-  try {
-    const status = (value as { status?: unknown }).status;
-    return typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
-      ? status
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  const status = readProperty(value, "status");
+  return typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
+    ? status
+    : undefined;
 }
 
 function activeTraceId(): string | undefined {
