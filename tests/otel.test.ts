@@ -311,6 +311,41 @@ describe("createTelemetry", () => {
     expect(Object.isFrozen(written)).toBe(true);
   });
 
+  it("should isolate poisoned field getters and Proxy traps from application work", () => {
+    const telemetry = createTelemetry();
+    const poisonedGetter = {} as TelemetryFields;
+    Object.defineProperty(poisonedGetter, "route", {
+      get() {
+        throw new Error("poisoned route getter");
+      },
+    });
+    const poisonedProxy = new Proxy({} as TelemetryFields, {
+      get(_target, property) {
+        if (property === "requestId") {
+          throw new Error("poisoned requestId trap");
+        }
+        return undefined;
+      },
+    });
+
+    expect(() => telemetry.log("info", "askr.request", poisonedGetter)).not.toThrow();
+    expect(telemetry.request(poisonedProxy, () => "request completed")).toBe("request completed");
+    expect(telemetry.span("askr.loader", poisonedGetter, () => "loader completed")).toBe(
+      "loader completed",
+    );
+  });
+
+  it("should return an unreadable thenable-shaped result without inspecting it twice", () => {
+    const telemetry = createTelemetry();
+    const result = Object.defineProperty({}, "then", {
+      get() {
+        throw new Error("poisoned then getter");
+      },
+    });
+
+    expect(telemetry.request({}, () => result)).toBe(result);
+  });
+
   it("should inject and extract trace identity through caller-owned carriers", () => {
     const telemetry = createTelemetry();
     const getter = {

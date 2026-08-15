@@ -7,17 +7,19 @@ describe("package surface", () => {
     expect(Object.keys(api).sort()).toEqual(["createTelemetry"]);
   });
 
-  it("should keep OpenTelemetry optional and publish no backend entrypoints", () => {
+  it("should require the runtime OpenTelemetry API peer and publish no backend entrypoints", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as {
       exports: Record<string, unknown>;
-      peerDependenciesMeta: Record<string, { optional: boolean }>;
+      peerDependencies: Record<string, string>;
+      peerDependenciesMeta?: Record<string, { optional?: boolean }>;
       publishConfig: { access: string };
     };
 
     expect(Object.keys(manifest.exports).sort()).toEqual([".", "./package.json"]);
-    expect(manifest.peerDependenciesMeta["@opentelemetry/api"].optional).toBe(true);
+    expect(manifest.peerDependencies["@opentelemetry/api"]).toBe("^1.9.1");
+    expect(manifest.peerDependenciesMeta?.["@opentelemetry/api"]?.optional).not.toBe(true);
     expect(manifest.publishConfig.access).toBe("public");
   });
 });
