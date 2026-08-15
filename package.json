@@ -66,11 +66,6 @@
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.1"
   },
-  "peerDependenciesMeta": {
-    "@opentelemetry/api": {
-      "optional": true
-    }
-  },
   "engines": {
     "node": ">=24.0.0"
   },

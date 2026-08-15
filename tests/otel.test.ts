@@ -335,13 +335,19 @@ describe("createTelemetry", () => {
     );
   });
 
-  it("should return an unreadable thenable-shaped result without inspecting it twice", () => {
+  it("should return a result with an unreadable then property without failing application work", () => {
     const telemetry = createTelemetry();
-    const result = Object.defineProperty({}, "then", {
-      get() {
-        throw new Error("poisoned then getter");
+    const result = new Proxy(
+      {},
+      {
+        get(_target, property) {
+          if (property === "then") {
+            throw new Error("poisoned then trap");
+          }
+          return undefined;
+        },
       },
-    });
+    );
 
     expect(telemetry.request({}, () => result)).toBe(result);
   });
