@@ -226,6 +226,34 @@ describe("createTelemetry", () => {
     expect(logs[0].requestId).toBeUndefined();
   });
 
+  it("should truncate string fields without splitting Unicode characters", () => {
+    const logs: TelemetryFields[] = [];
+    const telemetry = createTelemetry({
+      maxFieldLength: 1,
+      logger: (_level, _event, fields) => logs.push(fields),
+    });
+
+    telemetry.log("info", "askr.request", { route: "😀x" });
+    expect(logs[0].route).toBe("😀");
+  });
+
+  it("should preserve randomly sampled astral code points at every truncation boundary", () => {
+    let sample = 0x12345678;
+    for (let index = 0; index < 256; index += 1) {
+      sample = (sample * 1664525 + 1013904223) >>> 0;
+      const codePoint = 0x10000 + (sample % (0x10ffff - 0x10000 + 1));
+      const character = String.fromCodePoint(codePoint);
+      const logs: TelemetryFields[] = [];
+      const telemetry = createTelemetry({
+        maxFieldLength: 1,
+        logger: (_level, _event, fields) => logs.push(fields),
+      });
+
+      telemetry.log("info", "askr.request", { route: `${character}suffix` });
+      expect(logs[0].route).toBe(character);
+    }
+  });
+
   it("should preserve synchronous operations as synchronous values", () => {
     const telemetry = createTelemetry();
     expect(telemetry.ssrRender({ status: 200 }, () => "html")).toBe("html");
