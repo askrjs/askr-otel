@@ -127,6 +127,10 @@ function readProperty(source: unknown, key: PropertyKey): unknown {
   }
 }
 
+function truncateCharacters(value: string, maxLength: number): string {
+  return Array.from(value).slice(0, maxLength).join("");
+}
+
 function sanitizeFields(
   fields: TelemetryFields,
   maxLength = 256,
@@ -139,13 +143,13 @@ function sanitizeFields(
     if (typeof value === "string" || typeof value === "number") {
       let bounded: string | number = value;
       if (typeof value === "string") {
-        let result = "";
+        const characters: string[] = [];
         for (const character of value) {
           const code = character.codePointAt(0)!;
-          if (code > 31 && code !== 127) result += character;
-          if (result.length >= maxLength) break;
+          if (code > 31 && code !== 127) characters.push(character);
+          if (characters.length >= maxLength) break;
         }
-        bounded = result.slice(0, maxLength);
+        bounded = characters.join("");
       }
       let sanitized: string | number | undefined;
       try {
@@ -155,7 +159,7 @@ function sanitizeFields(
       }
       if (typeof sanitized === "string" || typeof sanitized === "number")
         (safe as Record<string, unknown>)[key] =
-          typeof sanitized === "string" ? sanitized.slice(0, maxLength) : sanitized;
+          typeof sanitized === "string" ? truncateCharacters(sanitized, maxLength) : sanitized;
     }
   }
 

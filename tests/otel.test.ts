@@ -226,6 +226,17 @@ describe("createTelemetry", () => {
     expect(logs[0].requestId).toBeUndefined();
   });
 
+  it("should truncate string fields without splitting Unicode characters", () => {
+    const logs: TelemetryFields[] = [];
+    const telemetry = createTelemetry({
+      maxFieldLength: 1,
+      logger: (_level, _event, fields) => logs.push(fields),
+    });
+
+    telemetry.log("info", "askr.request", { route: "😀x" });
+    expect(logs[0].route).toBe("😀");
+  });
+
   it("should preserve synchronous operations as synchronous values", () => {
     const telemetry = createTelemetry();
     expect(telemetry.ssrRender({ status: 200 }, () => "html")).toBe("html");
