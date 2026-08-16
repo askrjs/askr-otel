@@ -40,8 +40,8 @@ try {
   const installedManifest = JSON.parse(
     readFileSync(join(consumer, "node_modules", "@askrjs", "otel", "package.json"), "utf8"),
   );
-  if (installedManifest.version !== "0.0.6") {
-    throw new Error(`Expected packed @askrjs/otel@0.0.6, received ${installedManifest.version}.`);
+  if (installedManifest.version !== "0.2.0") {
+    throw new Error(`Expected packed @askrjs/otel@0.2.0, received ${installedManifest.version}.`);
   }
   execFileSync(
     process.execPath,
