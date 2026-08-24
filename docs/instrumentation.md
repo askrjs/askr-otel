@@ -13,8 +13,10 @@
 
 Every function preserves synchronous work as synchronous work and keeps promise
 work asynchronous. Nested calls use the active OpenTelemetry context, record
-success or error status, capture exceptions, record duration, and end exactly
-once.
+success or error status, record duration, and end exactly once. Raw exceptions
+are never exported by default. Configure `sanitizeException` to return a safe
+OpenTelemetry exception when exception capture is required; returning
+`undefined` keeps it suppressed.
 
 `extract`, `inject`, and `withContext` expose standard OpenTelemetry context
 propagation without choosing an HTTP framework. Adapters supply their carrier
@@ -26,6 +28,9 @@ Do not put raw paths, request data, or user identifiers in those identity fields
 Each allowlisted property read is isolated. A throwing getter or Proxy trap is
 dropped as unreadable, and an unreadable `then` or `status` property on a work
 result does not turn observability into an application failure.
+Use `onDroppedField` for development diagnostics when JavaScript callers may
+pass misspelled or non-allowlisted fields. The callback receives only the field
+key and is isolated from application work if it throws.
 
 `@opentelemetry/api` is a required peer because the package's root module uses
 its context, propagation, and tracing primitives. npm resolves the peer during a

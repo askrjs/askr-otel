@@ -38,4 +38,8 @@ user-controlled URLs. Unreadable allowlisted properties, including throwing
 getters and Proxy traps, are treated as absent so instrumentation cannot crash
 application work.
 
+Raw exceptions are suppressed unless `sanitizeException` returns a safe value.
+Applications can use `onDroppedField` for development diagnostics when a
+JavaScript caller supplies a misspelled or non-allowlisted field key.
+
 See [the instrumentation contract](docs/instrumentation.md).
