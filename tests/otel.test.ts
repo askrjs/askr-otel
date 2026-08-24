@@ -190,6 +190,35 @@ describe("createTelemetry", () => {
     expect(logs.every((entry) => typeof entry.fields.durationMs === "number")).toBe(true);
   });
 
+  it("should isolate overlapping nested spans, attributes, and sanitized exceptions", async () => {
+    captured.length = 0;
+    const telemetry = createTelemetry({
+      sanitizeException: (error) => ({ name: "Error", message: error.message }),
+    });
+    const failures = Array.from({ length: 12 }, (_, index) => {
+      const requestId = `req-${index}`;
+      const route = `/route-${index}`;
+      return telemetry.request({ requestId }, () =>
+        telemetry.loader({ route }, async () => {
+          await Promise.resolve();
+          throw new Error(`safe-${index}`);
+        }),
+      );
+    });
+
+    await expect(Promise.allSettled(failures)).resolves.toHaveLength(12);
+    const requests = captured.filter((entry) => entry.name === "askr.request");
+    const loaders = captured.filter((entry) => entry.name === "askr.loader");
+    expect(requests).toHaveLength(12);
+    expect(loaders).toHaveLength(12);
+    for (let index = 0; index < 12; index += 1) {
+      expect(requests[index].attributes).toMatchObject({ "askr.requestId": `req-${index}` });
+      expect(loaders[index].attributes).toMatchObject({ "askr.route": `/route-${index}` });
+      expect(loaders[index].parentSpanId).toBe(requests[index].context.spanId);
+      expect(loaders[index].exceptions).toEqual([{ name: "Error", message: `safe-${index}` }]);
+    }
+  });
+
   it("should not export raw rejected exceptions without an explicit sanitizer", async () => {
     captured.length = 0;
     const telemetry = createTelemetry();
@@ -257,6 +286,24 @@ describe("createTelemetry", () => {
   it("should preserve synchronous operations as synchronous values", () => {
     const telemetry = createTelemetry();
     expect(telemetry.ssrRender({ status: 200 }, () => "html")).toBe("html");
+  });
+
+  it("should preserve response identity and thrown errors exactly", async () => {
+    const telemetry = createTelemetry({ sanitizeException: () => ({ message: "safe" }) });
+    const response = { status: 201, headers: { location: "/items/1" }, body: "created" };
+    expect(telemetry.apiOperation({}, () => response)).toBe(response);
+
+    const failure = new TypeError("application contract");
+    expect(() =>
+      telemetry.action({}, () => {
+        throw failure;
+      }),
+    ).toThrow(failure);
+    await expect(
+      telemetry.loader({}, async () => {
+        throw failure;
+      }),
+    ).rejects.toBe(failure);
   });
 
   it("should isolate logger failures and still end each span exactly once", async () => {
@@ -337,6 +384,68 @@ describe("createTelemetry", () => {
     expect(written).toEqual({ requestId: "req-2", action: "save-profile" });
     expect(JSON.stringify(written)).not.toContain("secret");
     expect(Object.isFrozen(written)).toBe(true);
+  });
+
+  it("should apply caller redaction to embedded sensitive text and omit object values", () => {
+    const logs: TelemetryFields[] = [];
+    const telemetry = createTelemetry({
+      sanitizeField: (_name, value) =>
+        typeof value === "string" && /password|authorization|token/iu.test(value)
+          ? "[REDACTED]"
+          : value,
+      logger: (_level, _event, fields) => logs.push(fields),
+    });
+
+    telemetry.log("info", "askr.request", {
+      requestId: '{"password":"hunter2"}',
+      route: new Error("token=secret"),
+      action: { circular: undefined },
+    } as unknown as TelemetryFields);
+    expect(logs).toEqual([{ requestId: "[REDACTED]" }]);
+    expect(JSON.stringify(logs)).not.toContain("hunter2");
+    expect(JSON.stringify(logs)).not.toContain("secret");
+  });
+
+  it("should read each allowlisted getter at most once", () => {
+    let reads = 0;
+    const logs: TelemetryFields[] = [];
+    const fields = {} as TelemetryFields;
+    Object.defineProperty(fields, "requestId", {
+      enumerable: true,
+      get: () => `value-${++reads}`,
+    });
+    createTelemetry({ logger: (_level, _event, value) => logs.push(value) }).log(
+      "info",
+      "askr.request",
+      fields,
+    );
+    expect(reads).toBe(1);
+    expect(logs).toEqual([{ requestId: "value-1" }]);
+  });
+
+  it("should diagnose unknown fields without exposing values or changing work", () => {
+    const dropped: PropertyKey[] = [];
+    const telemetry = createTelemetry({
+      onDroppedField: (name) => dropped.push(name),
+    });
+    const secret = Symbol("secret-field");
+
+    expect(
+      telemetry.action(
+        { requestId: "req-3", resuestId: "typo-value", [secret]: "hidden" } as TelemetryFields,
+        () => "saved",
+      ),
+    ).toBe("saved");
+    expect(dropped).toEqual(["resuestId", secret]);
+
+    const isolated = createTelemetry({
+      onDroppedField: () => {
+        throw new Error("diagnostic failed");
+      },
+    });
+    expect(
+      isolated.log("debug", "askr.request", { typo: "secret" } as TelemetryFields),
+    ).toBeUndefined();
   });
 
   it("should isolate poisoned field getters and Proxy traps from application work", () => {

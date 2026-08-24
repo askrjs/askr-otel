@@ -103,6 +103,8 @@ export interface TelemetryOptions {
   ) => string | number | undefined;
   /** Exceptions are not exported unless this hook returns a sanitized value. */
   sanitizeException?: (error: Error) => Exception | undefined;
+  /** Optional diagnostic invoked for each non-allowlisted field; failures are isolated from application work. */
+  onDroppedField?: (name: PropertyKey) => void;
 }
 
 const FIELD_NAMES = [
@@ -135,8 +137,23 @@ function sanitizeFields(
   fields: TelemetryFields,
   maxLength = 256,
   sanitizer?: TelemetryOptions["sanitizeField"],
+  onDroppedField?: TelemetryOptions["onDroppedField"],
 ): TelemetryFields {
   const safe: TelemetryFields = {};
+
+  try {
+    for (const key of Reflect.ownKeys(fields)) {
+      if (!(FIELD_NAMES as readonly PropertyKey[]).includes(key)) {
+        try {
+          onDroppedField?.(key);
+        } catch {
+          // Diagnostics must not alter application behavior.
+        }
+      }
+    }
+  } catch {
+    // A poisoned ownKeys trap is treated like an unreadable property.
+  }
 
   for (const key of FIELD_NAMES) {
     const value = readProperty(fields, key);
@@ -248,7 +265,9 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     emit(
       level,
       event,
-      Object.freeze(sanitizeFields(fields, maxFieldLength, options.sanitizeField)),
+      Object.freeze(
+        sanitizeFields(fields, maxFieldLength, options.sanitizeField, options.onDroppedField),
+      ),
     );
   };
 
@@ -257,7 +276,12 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     inputFields: TelemetryFields,
     work: () => T,
   ): T => {
-    const fields = sanitizeFields(inputFields, maxFieldLength, options.sanitizeField);
+    const fields = sanitizeFields(
+      inputFields,
+      maxFieldLength,
+      options.sanitizeField,
+      options.onDroppedField,
+    );
     return tracer.startActiveSpan(
       operation,
       { kind: SpanKind.INTERNAL, attributes: spanAttributes(fields) },
