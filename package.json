@@ -57,11 +57,11 @@
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.1",
-    "@types/node": "^26.2.0",
-    "publint": "^0.3.23",
+    "@types/node": "^26.3.0",
+    "publint": "^0.3.24",
     "typescript": "^7.0.2",
-    "vite-plus": "^0.2.8",
-    "vitest": "^4.1.10"
+    "vite-plus": "^0.3.0",
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.1"
