@@ -41,7 +41,7 @@ try {
     readFileSync(join(consumer, "node_modules", "@askrjs", "otel", "package.json"), "utf8"),
   );
   if (installedManifest.version !== "0.2.1") {
-    throw new Error(`Expected packed @askrjs/otel@0.2.1, received ${installedManifest.version}.`);
+    throw new Error(`Expected packed @askrjs/otel@0.3.0, received ${installedManifest.version}.`);
   }
   execFileSync(
     process.execPath,
