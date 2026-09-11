@@ -8,6 +8,10 @@ if (!npmCli) {
   throw new Error("npm_execpath is required for the installed-package smoke test.");
 }
 
+const { version: expectedVersion } = JSON.parse(
+  readFileSync(join(process.cwd(), "package.json"), "utf8"),
+);
+
 const temporaryRoot = mkdtempSync(join(tmpdir(), "askrjs-otel-installed-"));
 const packed = join(temporaryRoot, "packed");
 const consumer = join(temporaryRoot, "consumer");
@@ -20,7 +24,9 @@ try {
     [npmCli, "pack", "--ignore-scripts", "--json", "--pack-destination", packed],
     { cwd: process.cwd(), encoding: "utf8" },
   );
-  const [{ filename }] = JSON.parse(packOutput);
+  const packResult = JSON.parse(packOutput);
+  // npm has returned both an array and a name-keyed object from `pack --json`.
+  const { filename } = Array.isArray(packResult) ? packResult[0] : Object.values(packResult)[0];
   const packageJson = {
     name: "askrjs-otel-installed-smoke",
     private: true,
@@ -40,8 +46,10 @@ try {
   const installedManifest = JSON.parse(
     readFileSync(join(consumer, "node_modules", "@askrjs", "otel", "package.json"), "utf8"),
   );
-  if (installedManifest.version !== "0.2.1") {
-    throw new Error(`Expected packed @askrjs/otel@0.2.1, received ${installedManifest.version}.`);
+  if (installedManifest.version !== expectedVersion) {
+    throw new Error(
+      `Expected packed @askrjs/otel@${expectedVersion}, received ${installedManifest.version}.`,
+    );
   }
   execFileSync(
     process.execPath,
