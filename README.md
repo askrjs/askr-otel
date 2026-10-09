@@ -43,3 +43,24 @@ Applications can use `onDroppedField` for development diagnostics when a
 JavaScript caller supplies a misspelled or non-allowlisted field key.
 
 See [the instrumentation contract](docs/instrumentation.md).
+
+## Migrating to 0.5
+
+The root exposes `createTelemetry` and `TelemetryOptions`. The former
+`Telemetry`, `TelemetryLevel`, `TelemetryOperation`, `TelemetryFields`, and
+`TelemetryLogger` type exports are private. Use:
+
+```ts
+import { createTelemetry, type TelemetryOptions } from "@askrjs/otel";
+
+type Telemetry = ReturnType<typeof createTelemetry>;
+type Logger = NonNullable<TelemetryOptions["logger"]>;
+type Fields = Parameters<Telemetry["request"]>[0];
+type Level = Parameters<Telemetry["log"]>[0];
+type Operation = Parameters<Telemetry["span"]>[0];
+```
+
+Wrong-type and nonfinite fields are dropped, including invalid sanitizer
+outputs. Identity fields remain strings; status and duration remain finite
+numbers. Async loggers are fire-and-forget: rejected promises are isolated,
+and instrumented work never waits for a sink.
