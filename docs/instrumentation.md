@@ -36,3 +36,27 @@ key and is isolated from application work if it throws.
 its context, propagation, and tracing primitives. npm resolves the peer during a
 normal install; applications install and configure an SDK/provider separately
 when they need exported telemetry instead of the API's no-op provider.
+
+## Field and sink ownership
+
+The logger receives every supported severity (`debug`, `info`, `warn`, `error`).
+There is no implicit minimum-level filter; apply filtering in the application
+sink. Synchronous throws and rejected returned promises are isolated. Async
+sinks are observed without delaying application work, so exporter flushing and
+shutdown remain application responsibilities.
+
+Nested values, wrong-type fields and nonfinite numbers are dropped before the
+sanitizer runs, and its output must retain the field's type. Identity fields are
+strings and status/duration fields are finite numbers. Strings are bounded to
+`maxFieldLength` Unicode code points (256 by default), with control characters
+removed from input. Choose stable operation identities and route patterns to
+control cardinality; this package does not invent a cardinality budget for
+application request IDs. The allowlist does not identify secrets embedded in
+otherwise valid strings: supply `sanitizeField` and `sanitizeException` for
+application-specific redaction. `onDroppedField` is a diagnostic for key names
+only, owned by the application's diagnostic policy.
+
+If a tracing provider throws before invoking the callback, work runs once
+without a span. If it throws after invoking work, the recorded application
+result or original error wins and work is never repeated. Exception inspection
+is isolated, and thrown/rejected `undefined` remains an application failure.
