@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-10-10
+
 ### Breaking changes
 
 - Keep the root factory `createTelemetry` and configuration `TelemetryOptions`.
@@ -21,3 +23,10 @@
   before or after the span callback.
 - Mark undefined throws/rejections as errors and isolate hostile exception
   inspection so it cannot replace the original failure or skip span cleanup.
+
+### Development
+
+- Refresh the locked development toolchain within its existing ranges: Vite+ 0.3.3 uses patched Tinypool 2.1.2, and source-map-js resolves to 1.2.2. Package runtime dependencies and public contracts are unchanged.
+
+- First-party development workflows use Vite+; specialized compiler, runtime,
+  browser, and package checks remain part of validation.
