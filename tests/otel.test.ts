@@ -16,7 +16,7 @@ import {
   type Tracer,
   type TracerProvider,
 } from "@opentelemetry/api";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { createTelemetry } from "../src/index";
 type TelemetryFields = Parameters<ReturnType<typeof createTelemetry>["request"]>[0];
 

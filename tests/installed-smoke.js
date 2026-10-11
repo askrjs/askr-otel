@@ -37,7 +37,7 @@ try {
 
   execFileSync(
     process.execPath,
-    [npmCli, "install", "--ignore-scripts", "--package-lock=false", join(packed, filename)],
+    [npmCli, "install", "--package-lock=false", join(packed, filename)],
     { cwd: consumer, stdio: "pipe" },
   );
   execFileSync(process.execPath, [npmCli, "ls", "@opentelemetry/api", "--all"], {
