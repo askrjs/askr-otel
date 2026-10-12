@@ -30,7 +30,10 @@ dropped as unreadable, and an unreadable `then` or `status` property on a work
 result does not turn observability into an application failure.
 Use `onDroppedField` for development diagnostics when JavaScript callers may
 pass misspelled or non-allowlisted fields. The callback receives only the field
-key and is isolated from application work if it throws.
+key and is isolated from application work if it throws or returns a rejected
+promise. Returned diagnostic promises are observed without awaiting them;
+synchronous work remains synchronous, and the original application result or
+failure is preserved.
 
 `@opentelemetry/api` is a required peer because the package's root module uses
 its context, propagation, and tracing primitives. npm resolves the peer during a

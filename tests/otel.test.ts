@@ -449,6 +449,61 @@ describe("createTelemetry", () => {
     ).toBeUndefined();
   });
 
+  it("should isolate rejected async field diagnostics without replacing work results or failures", async () => {
+    captured.length = 0;
+    const diagnosticError = new Error("async field diagnostic rejected");
+    const originalError = new Error("original application failure");
+    const dropped = vi.fn(async (_name: PropertyKey) => {
+      throw diagnosticError;
+    });
+    const logger = vi.fn();
+    const telemetry = createTelemetry({ onDroppedField: dropped, logger });
+    const fields = { requestId: "req-async-diagnostic", typo: "secret" } as TelemetryFields;
+    const response = { status: 200 };
+    const successfulWork = vi.fn(() => response);
+    const throwingWork = vi.fn(() => {
+      throw originalError;
+    });
+    const rejectedWork = vi.fn(async () => {
+      throw originalError;
+    });
+
+    expect(telemetry.log("debug", "askr.request", fields)).toBeUndefined();
+    expect(telemetry.request(fields, successfulWork)).toBe(response);
+    let thrown: unknown;
+    try {
+      telemetry.action(fields, throwingWork);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(originalError);
+    await expect(telemetry.loader(fields, rejectedWork)).rejects.toBe(originalError);
+    // Allow an unobserved diagnostic rejection to reach the test runner.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(dropped.mock.calls).toEqual([["typo"], ["typo"], ["typo"], ["typo"]]);
+    expect(successfulWork).toHaveBeenCalledTimes(1);
+    expect(throwingWork).toHaveBeenCalledTimes(1);
+    expect(rejectedWork).toHaveBeenCalledTimes(1);
+    expect(captured).toHaveLength(3);
+    expect(captured.every((span) => span.ended === 1)).toBe(true);
+    expect(logger).toHaveBeenCalledTimes(4);
+    expect(JSON.stringify(logger.mock.calls)).not.toContain("secret");
+  });
+
+  it("should preserve synchronous work while an async field diagnostic is pending", async () => {
+    let rejectDiagnostic!: (reason: unknown) => void;
+    const pending = new Promise<void>((_resolve, reject) => {
+      rejectDiagnostic = reject;
+    });
+    const telemetry = createTelemetry({ onDroppedField: () => pending });
+    const response = { status: 201 };
+
+    expect(telemetry.request({ typo: "secret" } as TelemetryFields, () => response)).toBe(response);
+    rejectDiagnostic(new Error("late field diagnostic rejection"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
   it("should isolate poisoned field getters and Proxy traps from application work", () => {
     const telemetry = createTelemetry();
     const poisonedGetter = {} as TelemetryFields;

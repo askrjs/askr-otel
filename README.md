@@ -40,7 +40,9 @@ application work.
 
 Raw exceptions are suppressed unless `sanitizeException` returns a safe value.
 Applications can use `onDroppedField` for development diagnostics when a
-JavaScript caller supplies a misspelled or non-allowlisted field key.
+JavaScript caller supplies a misspelled or non-allowlisted field key. Thrown
+errors and rejected returned diagnostic promises are isolated without delaying
+application work.
 
 See [the instrumentation contract](docs/instrumentation.md).
 
