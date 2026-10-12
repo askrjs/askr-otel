@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-10-12
+
 ### Breaking changes
 
 - Keep the root factory `createTelemetry` and configuration `TelemetryOptions`.
