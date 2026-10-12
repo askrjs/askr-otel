@@ -15,6 +15,8 @@
 
 ### Fixes
 
+- Isolate rejected async `onDroppedField` diagnostics without awaiting them,
+  preserving synchronous results, original application failures and span cleanup.
 - Isolate rejected async loggers without awaiting them or replacing application
   results/errors.
 - Preserve exact-once work and its result/error if the tracing provider throws

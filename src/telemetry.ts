@@ -103,7 +103,7 @@ export interface TelemetryOptions {
   ) => string | number | undefined;
   /** Exceptions are not exported unless this hook returns a sanitized value. */
   sanitizeException?: (error: Error) => Exception | undefined;
-  /** Optional diagnostic invoked for each non-allowlisted field; failures are isolated from application work. */
+  /** Optional diagnostic invoked for each non-allowlisted field; thrown and asynchronously rejected failures are isolated without awaiting diagnostics. */
   onDroppedField?: (name: PropertyKey) => void;
 }
 
@@ -151,7 +151,8 @@ function sanitizeFields(
     for (const key of Reflect.ownKeys(fields)) {
       if (!(FIELD_NAMES as readonly PropertyKey[]).includes(key)) {
         try {
-          onDroppedField?.(key);
+          const pending = onDroppedField?.(key);
+          if (isPromiseLike(pending)) void Promise.resolve(pending).catch(() => undefined);
         } catch {
           // Diagnostics must not alter application behavior.
         }

@@ -64,10 +64,17 @@ import manifest from "@askrjs/otel/package.json" with { type: "json" };
 assert.equal(manifest.version, ${JSON.stringify(expectedVersion)});
 assert.deepEqual(Object.keys(api), ["createTelemetry"]);
 const response = { status: 200 };
-const telemetry = api.createTelemetry({ logger: async () => { throw new Error("sink rejection"); } });
-assert.equal(telemetry.request({}, () => response), response);
+const dropped = [];
+const telemetry = api.createTelemetry({
+  logger: async () => { throw new Error("sink rejection"); },
+  onDroppedField: async (name) => { dropped.push(name); throw new Error("diagnostic rejection"); },
+});
+const fields = { requestId: "installed-request", typo: "secret" };
+assert.equal(telemetry.log("debug", "askr.request", fields), undefined);
+assert.equal(telemetry.request(fields, () => response), response);
 const failure = new Error("original application error");
-await assert.rejects(telemetry.loader({}, async () => { throw failure; }), (error) => error === failure);
+await assert.rejects(telemetry.loader(fields, async () => { throw failure; }), (error) => error === failure);
+assert.deepEqual(dropped, ["typo", "typo", "typo"]);
 await assert.rejects(import("@askrjs/otel/dist/index.js"), { code: "ERR_PACKAGE_PATH_NOT_EXPORTED" });
 await new Promise((resolve) => setTimeout(resolve, 0));
 `,
@@ -78,7 +85,10 @@ await new Promise((resolve) => setTimeout(resolve, 0));
     join(consumer, "types.ts"),
     `
 import { createTelemetry, type TelemetryOptions } from "@askrjs/otel";
-const options: TelemetryOptions = { logger: async (level, event, fields) => { void level; void event; void fields.route; } };
+const options: TelemetryOptions = {
+  logger: async (level, event, fields) => { void level; void event; void fields.route; },
+  onDroppedField: async (name) => { void name; },
+};
 const telemetry: ReturnType<typeof createTelemetry> = createTelemetry(options);
 const value: number = telemetry.request({}, () => 42);
 const pending: Promise<string> = telemetry.loader({}, async () => "loaded");
