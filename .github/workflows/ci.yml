@@ -55,3 +55,6 @@ jobs:
         run: |
           npm run typecheck --if-present
           npm run test:types --if-present
+
+      - name: Packed contract
+        run: npm run test:installed && npm run test:publint

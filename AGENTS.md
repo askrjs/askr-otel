@@ -15,6 +15,17 @@ only for demonstrated operational needs.
 
 Run `npm run check` before declaring a change ready.
 
+## Changelog
+
+Any change to the `version` field in `package.json`, whether a release,
+prerelease, or patch bump, must include a matching `## <version>` section in
+`CHANGELOG.md` in the same commit or pull request. Date the section and list
+breaking changes (with migration notes), deprecations, additions, and fixes.
+Move entries from `Unreleased` into the new version section rather than leaving
+them there. If the repository has no `CHANGELOG.md` yet, create one (Keep a
+Changelog style) at the next version bump. Do not publish or tag a version whose
+changelog section is missing.
+
 ## Optimization Gate
 
 A benchmark number is only half of an optimization's success criterion. The

@@ -16,8 +16,9 @@ import {
   type Tracer,
   type TracerProvider,
 } from "@opentelemetry/api";
-import { beforeAll, describe, expect, it } from "vitest";
-import { createTelemetry, type TelemetryFields } from "../src/index";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { createTelemetry } from "../src/index";
+type TelemetryFields = Parameters<ReturnType<typeof createTelemetry>["request"]>[0];
 
 type CapturedSpan = {
   name: string;
@@ -448,6 +449,61 @@ describe("createTelemetry", () => {
     ).toBeUndefined();
   });
 
+  it("should isolate rejected async field diagnostics without replacing work results or failures", async () => {
+    captured.length = 0;
+    const diagnosticError = new Error("async field diagnostic rejected");
+    const originalError = new Error("original application failure");
+    const dropped = vi.fn(async (_name: PropertyKey) => {
+      throw diagnosticError;
+    });
+    const logger = vi.fn();
+    const telemetry = createTelemetry({ onDroppedField: dropped, logger });
+    const fields = { requestId: "req-async-diagnostic", typo: "secret" } as TelemetryFields;
+    const response = { status: 200 };
+    const successfulWork = vi.fn(() => response);
+    const throwingWork = vi.fn(() => {
+      throw originalError;
+    });
+    const rejectedWork = vi.fn(async () => {
+      throw originalError;
+    });
+
+    expect(telemetry.log("debug", "askr.request", fields)).toBeUndefined();
+    expect(telemetry.request(fields, successfulWork)).toBe(response);
+    let thrown: unknown;
+    try {
+      telemetry.action(fields, throwingWork);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(originalError);
+    await expect(telemetry.loader(fields, rejectedWork)).rejects.toBe(originalError);
+    // Allow an unobserved diagnostic rejection to reach the test runner.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(dropped.mock.calls).toEqual([["typo"], ["typo"], ["typo"], ["typo"]]);
+    expect(successfulWork).toHaveBeenCalledTimes(1);
+    expect(throwingWork).toHaveBeenCalledTimes(1);
+    expect(rejectedWork).toHaveBeenCalledTimes(1);
+    expect(captured).toHaveLength(3);
+    expect(captured.every((span) => span.ended === 1)).toBe(true);
+    expect(logger).toHaveBeenCalledTimes(4);
+    expect(JSON.stringify(logger.mock.calls)).not.toContain("secret");
+  });
+
+  it("should preserve synchronous work while an async field diagnostic is pending", async () => {
+    let rejectDiagnostic!: (reason: unknown) => void;
+    const pending = new Promise<void>((_resolve, reject) => {
+      rejectDiagnostic = reject;
+    });
+    const telemetry = createTelemetry({ onDroppedField: () => pending });
+    const response = { status: 201 };
+
+    expect(telemetry.request({ typo: "secret" } as TelemetryFields, () => response)).toBe(response);
+    rejectDiagnostic(new Error("late field diagnostic rejection"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
   it("should isolate poisoned field getters and Proxy traps from application work", () => {
     const telemetry = createTelemetry();
     const poisonedGetter = {} as TelemetryFields;
@@ -513,5 +569,193 @@ describe("createTelemetry", () => {
 
     expect(carrier).toEqual({ "x-trace-id": "30000000000000000000000000000003" });
     expect(trace.getSpanContext(ROOT_CONTEXT)).toBeUndefined();
+  });
+  it("should isolate rejected async sinks without replacing application results or failures", async () => {
+    captured.length = 0;
+    const sinkError = new Error("async sink rejected");
+    const originalError = new Error("application rejected");
+    const telemetry = createTelemetry({
+      logger: async () => {
+        throw sinkError;
+      },
+    });
+    const response = { status: 200 };
+    expect(telemetry.request({}, () => response)).toBe(response);
+    await expect(
+      telemetry.loader({}, async () => {
+        throw originalError;
+      }),
+    ).rejects.toBe(originalError);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(captured).toHaveLength(2);
+    expect(captured.every((span) => span.ended === 1)).toBe(true);
+  });
+
+  it("should mark undefined throws and rejections as failures", async () => {
+    captured.length = 0;
+    const telemetry = createTelemetry();
+    let caught = false;
+    try {
+      telemetry.action({}, () => {
+        throw undefined;
+      });
+    } catch (error) {
+      caught = true;
+      expect(error).toBeUndefined();
+    }
+    expect(caught).toBe(true);
+    await expect(telemetry.loader({}, () => Promise.reject(undefined))).rejects.toBeUndefined();
+    expect(captured.map((span) => span.status?.code)).toEqual([
+      SpanStatusCode.ERROR,
+      SpanStatusCode.ERROR,
+    ]);
+    expect(captured.every((span) => span.ended === 1)).toBe(true);
+  });
+
+  it("should preserve a hostile thrown value when exception inspection fails", () => {
+    captured.length = 0;
+    const original = new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error("poisoned prototype");
+        },
+      },
+    );
+    const telemetry = createTelemetry({ sanitizeException: () => ({ message: "safe" }) });
+    let caught: unknown;
+    try {
+      telemetry.action({}, () => {
+        throw original;
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught === original).toBe(true);
+    expect(captured[0].ended).toBe(1);
+    expect(captured[0].exceptions).toEqual([]);
+  });
+
+  it.each(["before", "after"] as const)(
+    "should preserve exact-once application work when the tracer fails %s invoking it",
+    (stage) => {
+      const tracer = trace.getTracer("@askrjs/otel");
+      const originalStart = tracer.startActiveSpan.bind(tracer);
+      const spy = vi.spyOn(tracer, "startActiveSpan").mockImplementation(((...args: unknown[]) => {
+        if (stage === "before") throw new Error("provider failure before work");
+        Reflect.apply(originalStart, undefined, args);
+        throw new Error("provider failure after work");
+      }) as typeof tracer.startActiveSpan);
+      try {
+        const work = vi.fn(() => ({ status: 201 }));
+        const result = createTelemetry().request({}, work);
+        expect(result).toBe(work.mock.results[0].value);
+        expect(work).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it("should preserve the original application failure when the provider replaces it", () => {
+    const tracer = trace.getTracer("@askrjs/otel");
+    const originalStart = tracer.startActiveSpan.bind(tracer);
+    const spy = vi.spyOn(tracer, "startActiveSpan").mockImplementation(((...args: unknown[]) => {
+      try {
+        Reflect.apply(originalStart, undefined, args);
+      } catch {
+        throw new Error("provider replaced error");
+      }
+    }) as typeof tracer.startActiveSpan);
+    const failure = new Error("original app error");
+    const work = vi.fn(() => {
+      throw failure;
+    });
+    try {
+      expect(() => createTelemetry().action({}, work)).toThrow(failure);
+      expect(work).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it("should drop nested, nonfinite and mismatched field values before invoking the sanitizer", () => {
+    const logs: TelemetryFields[] = [];
+    const sanitizer = vi.fn((_key, value) => value);
+    const telemetry = createTelemetry({
+      logger: (_level, _event, fields) => {
+        logs.push(fields);
+      },
+      sanitizeField: sanitizer,
+    });
+    const nested: { password: string; self?: unknown } = { password: "secret" };
+    nested.self = nested;
+    telemetry.log("warn", "askr.request", {
+      route: nested,
+      requestId: 42,
+      status: NaN,
+      durationMs: Infinity,
+      body: nested,
+    } as unknown as TelemetryFields);
+    expect(logs).toEqual([{}]);
+    expect(sanitizer).not.toHaveBeenCalled();
+    expect(JSON.stringify(logs)).not.toContain("secret");
+  });
+
+  it("should drop invalid transformed fields and retain bounded valid values", () => {
+    const logs: TelemetryFields[] = [];
+    const telemetry = createTelemetry({
+      maxFieldLength: 4,
+      sanitizeField: (key) =>
+        key === "status" ? "invalid" : key === "durationMs" ? NaN : "😀😀😀😀😀",
+      logger: (_level, _event, fields) => {
+        logs.push(fields);
+      },
+    });
+    telemetry.log("info", "askr.action", { route: "/valid", status: 200, durationMs: 1 });
+    expect(logs).toEqual([{ route: "😀😀😀😀" }]);
+  });
+
+  it("should forward every supported severity and repeated calls without implicit filtering", () => {
+    const records: string[] = [];
+    const telemetry = createTelemetry({
+      logger: (level, event) => {
+        records.push(`${level}:${event}`);
+      },
+    });
+    for (let count = 0; count < 25; count += 1) {
+      for (const level of ["debug", "info", "warn", "error"] as const)
+        telemetry.log(level, "askr.request");
+    }
+    expect(records).toHaveLength(100);
+    expect(records.slice(0, 4)).toEqual([
+      "debug:askr.request",
+      "info:askr.request",
+      "warn:askr.request",
+      "error:askr.request",
+    ]);
+  });
+
+  it.each([0, -1, 0.5, Infinity, NaN])(
+    "should reject an invalid maxFieldLength %s before work starts",
+    (maxFieldLength) => {
+      expect(() => createTelemetry({ maxFieldLength })).toThrow("positive integer");
+    },
+  );
+
+  it("should preserve rejected async work when the provider throws after its callback returns", async () => {
+    const tracer = trace.getTracer("@askrjs/otel");
+    const originalStart = tracer.startActiveSpan.bind(tracer);
+    const spy = vi.spyOn(tracer, "startActiveSpan").mockImplementation(((...args: unknown[]) => {
+      Reflect.apply(originalStart, undefined, args);
+      throw new Error("post-callback provider failure");
+    }) as typeof tracer.startActiveSpan);
+    const failure = new Error("original async failure");
+    const work = vi.fn(() => Promise.reject(failure));
+    try {
+      await expect(createTelemetry().loader({}, work)).rejects.toBe(failure);
+      expect(work).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
