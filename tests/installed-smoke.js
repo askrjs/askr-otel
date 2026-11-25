@@ -31,7 +31,7 @@ try {
     name: "askrjs-otel-installed-smoke",
     private: true,
     type: "module",
-    dependencies: { "@opentelemetry/api": "1.9.1" },
+    dependencies: { "@opentelemetry/api": "1.10.0" },
   };
   writeFileSync(join(consumer, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`);
 

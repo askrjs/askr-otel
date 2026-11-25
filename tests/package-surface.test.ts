@@ -18,7 +18,7 @@ describe("package surface", () => {
     };
 
     expect(Object.keys(manifest.exports).sort()).toEqual([".", "./package.json"]);
-    expect(manifest.peerDependencies["@opentelemetry/api"]).toBe("^1.9.1");
+    expect(manifest.peerDependencies["@opentelemetry/api"]).toBe("^1.10.0");
     expect(manifest.peerDependenciesMeta?.["@opentelemetry/api"]?.optional).not.toBe(true);
     expect(manifest.publishConfig.access).toBe("public");
   });
