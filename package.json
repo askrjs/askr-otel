@@ -60,14 +60,14 @@
     "@types/node": "^26.6.6",
     "publint": "^0.3.25",
     "typescript": "^7.0.2",
-    "vite-plus": "1.7.0",
-    "vitest": "^5.1.0"
+    "vite-plus": "^1.1.0",
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.1"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@8.3.8000"
+    "vite": "npm:@voidzero-dev/vite-plus-core@8.3.8001"
   },
   "engines": {
     "node": ">=24.0.0"
