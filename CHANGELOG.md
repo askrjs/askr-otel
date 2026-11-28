@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.1 - 2026-11-28
+
+### Development
+
+- Refresh the development toolchain and migrate package checks to Vite+.
+
 ## 0.5.0 - 2026-10-12
 
 ### Breaking changes
